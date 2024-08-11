@@ -1,32 +1,56 @@
 function Invoke-CIPPStandardPWdisplayAppInformationRequiredState {
     <#
     .FUNCTIONALITY
-    Internal
+        Internal
+    .COMPONENT
+        (APIName) PWdisplayAppInformationRequiredState
+    .SYNOPSIS
+        (Label) Enable Passwordless with Location information and Number Matching
+    .DESCRIPTION
+        (Helptext) Enables the MS authenticator app to display information about the app that is requesting authentication. This displays the application name.
+        (DocsDescription) Allows users to use Passwordless with Number Matching and adds location information from the last request
+    .NOTES
+        CAT
+            Entra (AAD) Standards
+        TAG
+            "lowimpact"
+            "CIS"
+        ADDEDCOMPONENT
+        IMPACT
+            Low Impact
+        POWERSHELLEQUIVALENT
+            Update-MgBetaPolicyAuthenticationMethodPolicyAuthenticationMethodConfiguration
+        RECOMMENDEDBY
+            "CIS"
+        UPDATECOMMENTBLOCK
+            Run the Tools\Update-StandardsComments.ps1 script to update this comment block
+    .LINK
+        https://docs.cipp.app/user-documentation/tenant/standards/edit-standards
     #>
-    param($Tenant, $Settings)
-    $CurrentInfo = New-GraphGetRequest -Uri 'https://graph.microsoft.com/beta/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/microsoftAuthenticator' -tenantid $Tenant
 
-    If ($Settings.remediate) {
-        try {
-            $body = @'
-{"@odata.type":"#microsoft.graph.microsoftAuthenticatorAuthenticationMethodConfiguration","id":"MicrosoftAuthenticator","includeTargets":[{"id":"all_users","isRegistrationRequired":false,"targetType":"group","authenticationMode":"any"}],"excludeTargets":[],"state":"enabled","isSoftwareOathEnabled":false,"featureSettings":{"displayLocationInformationRequiredState":{"state":"enabled","includeTarget":{"id":"all_users","targetType":"group","displayName":"All users"}},"displayAppInformationRequiredState":{"state":"enabled","includeTarget":{"id":"all_users","targetType":"group","displayName":"All users"}},"companionAppAllowedState":{"state":"default","includeTarget":{"id":"all_users","targetType":"group","displayName":"All users"}}}}
-'@
-    (New-GraphPostRequest -tenantid $tenant -Uri 'https://graph.microsoft.com/beta/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/microsoftAuthenticator' -Type patch -Body $body -ContentType 'application/json')
-            Write-LogMessage -API 'Standards' -tenant $tenant -message 'Enabled passwordless with Information and Number Matching.' -sev Info
-        } catch {
-            Write-LogMessage -API 'Standards' -tenant $tenant -message "Failed to enable passwordless with Information and Number Matching. Error: $($_.exception.message)" -sev 'Error'
+    param($Tenant, $Settings)
+    ##$Rerun -Type Standard -Tenant $Tenant -Settings $Settings 'PWdisplayAppInformationRequiredState'
+
+    $CurrentInfo = New-GraphGetRequest -Uri 'https://graph.microsoft.com/beta/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/microsoftAuthenticator' -tenantid $Tenant
+    $State = if ($CurrentInfo.state -eq 'enabled') { $true } else { $false }
+
+    If ($Settings.remediate -eq $true) {
+        if ($State) {
+            Write-LogMessage -API 'Standards' -tenant $tenant -message 'Passwordless with Information and Number Matching is already enabled.' -sev Info
+        } else {
+            Set-CIPPAuthenticationPolicy -Tenant $tenant -APIName 'Standards' -AuthenticationMethodId 'MicrosoftAuthenticator' -Enabled $true
         }
     }
-    if ($Settings.alert) {
 
-        if ($CurrentInfo.featureSettings.displayAppInformationRequiredState.state -eq 'enabled') {
+    if ($Settings.alert -eq $true) {
+        if ($State) {
             Write-LogMessage -API 'Standards' -tenant $tenant -message 'Passwordless with Information and Number Matching is enabled.' -sev Info
         } else {
             Write-LogMessage -API 'Standards' -tenant $tenant -message 'Passwordless with Information and Number Matching is not enabled.' -sev Alert
         }
     }
-    if ($Settings.report) {
-        if ($CurrentInfo.featureSettings.displayAppInformationRequiredState.state -eq 'enabled') { $authstate = $true } else { $authstate = $false }
-        Add-CIPPBPAField -FieldName 'PWdisplayAppInformationRequiredState' -FieldValue [bool]$authstate -StoreAs bool -Tenant $tenant
+
+    if ($Settings.report -eq $true) {
+        Add-CIPPBPAField -FieldName 'PWdisplayAppInformationRequiredState' -FieldValue $State -StoreAs bool -Tenant $tenant
     }
 }
